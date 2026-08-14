@@ -1,2 +1,0 @@
-# profitmax
-profitmax journal
