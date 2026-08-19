@@ -45,6 +45,13 @@ Whenever you generate, refactor, or explain code, you **MUST** adhere to the fol
 - **Explain the "Why":** Use inline comments to describe the *why*, not just the *what*, especially when parsing financial data, managing database locks, or handling state changes.
 - **Visual demarcations:** Clearly demarcate different sections of the code (e.g., `// --- STATE ---`, `// --- EFFECTS ---`, `# --- DB CONNECTION ---`).
 
+### 5. Version Control & Git Branching Protocol
+
+- **Feature Branches:** All new pages, features, or significant refactors MUST be developed on an isolated branch (e.g., `git checkout -b feature/trade-history-page`). Never commit directly to `main`.
+- **Logical Commits:** Commit work at logical milestones.
+- **Testing & DeepScan:** Before merging, ensure the code runs without errors locally and passes static analysis (reference: [DeepScan Dashboard](https://deepscan.io/dashboard/#view=project&tid=30448&pid=32268&bid=1056838)).
+- **Merge and Delete:** Once tested and approved, merge the feature branch into `main` and immediately delete the branch to keep the repository clean.
+
 ---
 
 ## Formatting

@@ -6,5 +6,28 @@
         "*.tsv": "duckdb.dataFileViewer",
         "*.xlsx": "duckdb.dataFileViewer"
     },
-    "deepscan.enable": true
+    "deepscan.enable": true,
+    "cSpell.words": [
+        "certifi",
+        "Docstrings",
+        "duckdb",
+        "fastapi",
+        "httpx",
+        "ibkr",
+        "lifecycles",
+        "pasteable",
+        "pluggy",
+        "profitmax",
+        "pycountry"
+    ],
+    "duckdb.databases": [
+        {
+            "alias": "profitmax",
+            "type": "file",
+            "path": "/Users/kashghanchi/DEV/profitmax/backend/data/profitmax.duckdb",
+            "attached": true,
+            "readOnly": false
+        }
+    ],
+    "duckdb.defaultDatabase": "profitmax"
 }

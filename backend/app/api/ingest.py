@@ -2,20 +2,28 @@ from fastapi import APIRouter
 from pathlib import Path
 from app.services.ibkr_parser import process_ibkr_flex_file
 
-# Create an API router to group our ingestion endpoints
 router = APIRouter()
 
 @router.post("/ingest-ibkr")
 def trigger_ibkr_ingestion():
     """
-    This endpoint will be hit by your Render Cron Job daily.
-    It kicks off the SQL-free data pipeline to process IBKR data.
+    Triggers parsing and DuckDB ingestion for the IBKR Flex XML report.
     """
-    # For this MVP test, we pass a dummy path.
-    # Later, this will download the Flex XML from IBKR or accept an uploaded file.
-    dummy_path = Path("dummy_flex_report.xml")
+    # 1. Locate the XML file in backend/data/
+    data_dir = Path(__file__).parent.parent.parent / "data"
+    xml_path = data_dir / "Profitmax_Flex_Query.xml"
     
-    # Call the service function we wrote in ibkr_parser.py
-    result = process_ibkr_flex_file(dummy_path)
-    
+    # Fallback if saved directly under backend/
+    if not xml_path.exists():
+        xml_path = Path(__file__).parent.parent.parent / "Profitmax_Flex_Query.xml"
+
+    # 2. Check file existence
+    if not xml_path.exists():
+        return {
+            "status": "error", 
+            "message": f"Flex XML file not found. Place Profitmax_Flex_Query.xml in {data_dir}"
+        }
+        
+    # 3. Process XML with Polars, Pandera, and DuckDB
+    result = process_ibkr_flex_file(xml_path)
     return result
