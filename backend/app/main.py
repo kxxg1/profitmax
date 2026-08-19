@@ -2,11 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.db import get_db_connection
 
-# 1. IMPORT THE NEW ROUTER
-from app.api.ingest import router as ingest_router 
+# 1. Import all routers
+from app.api.ingest import router as ingest_router
+from app.api.lookups import router as lookups_router
+from app.api.trades import router as trades_router
+from app.api.market_data import router as market_data_router
+from app.api.analytics import router as analytics_router
 
 # Initialize the FastAPI application
-app = FastAPI(title="Profit Max API", version="1.0.0")
+app = FastAPI(
+    title="Profit Max Backend Engine API",
+    version="1.0.0",
+    description="Options Trading Journal with Spread Analytics"
+)
 
 # Configure CORS to allow the Vite React frontend to communicate with this API
 app.add_middleware(
@@ -17,8 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. ATTACH THE ROUTER TO THE APP
+# 2. Register all routers
+# Note: Retaining the explicit prefix for ingest_router to prevent breaking existing API calls
 app.include_router(ingest_router, prefix="/api", tags=["Ingestion"])
+
+# New analytical routers (These already have their prefixes defined internally, e.g., /api/v1/...)
+app.include_router(lookups_router)
+app.include_router(trades_router)
+app.include_router(market_data_router)
+app.include_router(analytics_router)
 
 @app.on_event("startup")
 def startup_event():
@@ -28,7 +43,11 @@ def startup_event():
     """
     conn = get_db_connection()
     conn.close()
-    print("✅ Profit Max Database Initialized.")
+    print("✅ Profit Max Analytical Database Initialized.")
+
+@app.get("/")
+def root():
+    return {"status": "online", "system": "Profit Max Backend Engine"}
 
 @app.get("/health")
 def health_check():
