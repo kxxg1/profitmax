@@ -26,12 +26,14 @@ def get_db_connection():
             expiration VARCHAR NOT NULL,
             strike DOUBLE NOT NULL,
             "right" VARCHAR NOT NULL,
+            buy_sell VARCHAR NOT NULL,
             quantity DOUBLE NOT NULL,
             trade_price DOUBLE NOT NULL,
             proceeds DOUBLE NOT NULL,
             commission DOUBLE NOT NULL,
             exchange VARCHAR,
             order_type VARCHAR NOT NULL,
+            notes VARCHAR DEFAULT '',
             is_api_order BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
