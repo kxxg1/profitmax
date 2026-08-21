@@ -1,3 +1,4 @@
+import math
 import polars as pl
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -44,20 +45,20 @@ def calculate_ny_dte(expiry_str: str) -> int:
 
 
 def classify_merged_combo(group_df: pl.DataFrame, raw_proceeds_sum: float) -> dict:
-    """Level 2 Structural Fingerprinting: Evaluates exact strike geometry."""
+    """Production Level 2 Structural Fingerprinting with Ratio & Synthetic support."""
     total_contract_legs = len(group_df)
     expirations = group_df["expiration"].n_unique()
     unique_strikes_count = group_df["strike"].n_unique()
     
     sorted_df = group_df.sort("strike")
     strikes = sorted_df["strike"].to_list()
-    qtys = sorted_df["merged_quantity"].to_list()
+    quantities = [round(float(q), 4) for q in sorted_df["merged_quantity"].to_list()]
 
     calls = group_df.filter(pl.col("right") == "C").sort("strike")
     puts = group_df.filter(pl.col("right") == "P").sort("strike")
     
     min_qty = group_df["merged_quantity"].abs().min()
-    spread_units = float(min_qty) if min_qty is not None else 1.0
+    spread_units = float(str(min_qty)) if min_qty is not None else 1.0
     cash_flow_label = "Credit" if raw_proceeds_sum > 0 else ("Debit" if raw_proceeds_sum < 0 else "Even")
     
     base_metrics = {
@@ -67,38 +68,89 @@ def classify_merged_combo(group_df: pl.DataFrame, raw_proceeds_sum: float) -> di
         "spread_units": spread_units
     }
 
-    # 1. VERTICAL SPREADS (2 Legs, 1 Expiry)
-    if total_contract_legs == 2 and expirations == 1 and unique_strikes_count == 2:
+    # 1. SINGLE-LEG OPTIONS
+    if total_contract_legs == 1:
+        qty = group_df["merged_quantity"][0]
+        right = group_df["right"][0]
+        if right == "C":
+            strategy = "Single Long Call" if qty > 0 else "Single Short Call"
+        elif right == "P":
+            strategy = "Single Long Put" if qty > 0 else "Single Short Put"
+        else:
+            strategy = "Single Option"
+        return {**base_metrics, "strategy_type": strategy}
+
+    # 2. TWO-LEG STRATEGIES (Same Expiry)
+    if total_contract_legs == 2 and expirations == 1:
+        # Vertical Call Spreads & Call Ratios
         if len(calls) == 2:
-            k_long = calls.filter(pl.col("merged_quantity") > 0)["strike"][0]
-            k_short = calls.filter(pl.col("merged_quantity") < 0)["strike"][0]
-            strategy = "Bear Call Spread" if k_short < k_long else "Bull Call Spread"
+            q1, q2 = calls["merged_quantity"].to_list()
+            if abs(q1) == abs(q2) and (q1 * q2 < 0): # Enforce opposing legs
+                k_long = calls.filter(pl.col("merged_quantity") > 0)["strike"][0]
+                k_short = calls.filter(pl.col("merged_quantity") < 0)["strike"][0]
+                strategy = "Bear Call Spread" if k_short < k_long else "Bull Call Spread"
+            elif q1 * q2 < 0:
+                strategy = "Ratio Call Spread"
+            else:
+                strategy = "Custom Combination"
             return {**base_metrics, "strategy_type": strategy}
             
+        # Vertical Put Spreads & Put Ratios
         if len(puts) == 2:
-            k_long = puts.filter(pl.col("merged_quantity") > 0)["strike"][0]
-            k_short = puts.filter(pl.col("merged_quantity") < 0)["strike"][0]
-            strategy = "Bull Put Spread" if k_short > k_long else "Bear Put Spread"
+            q1, q2 = puts["merged_quantity"].to_list()
+            if abs(q1) == abs(q2) and (q1 * q2 < 0): # Enforce opposing legs
+                k_long = puts.filter(pl.col("merged_quantity") > 0)["strike"][0]
+                k_short = puts.filter(pl.col("merged_quantity") < 0)["strike"][0]
+                strategy = "Bull Put Spread" if k_short > k_long else "Bear Put Spread"
+            elif q1 * q2 < 0:
+                strategy = "Ratio Put Spread"
+            else:
+                strategy = "Custom Combination"
             return {**base_metrics, "strategy_type": strategy}
 
-    # 2. BUTTERFLIES & BWBs (3 Legs, 1 Expiry)
-    if total_contract_legs == 3 and expirations == 1 and unique_strikes_count == 3:
-        q1, q2, q3 = qtys
-        is_standard_fly = (q1 > 0 and q2 < 0 and q3 > 0 and abs(q2) == abs(q1) + abs(q3))
-        is_inverse_fly  = (q1 < 0 and q2 > 0 and q3 < 0 and abs(q2) == abs(q1) + abs(q3))
+        # Straddles, Strangles & Risk Reversals (1 Call + 1 Put)
+        if len(calls) == 1 and len(puts) == 1:
+            q_call = calls["merged_quantity"][0]
+            q_put = puts["merged_quantity"][0]
+            
+            if unique_strikes_count == 1:
+                if q_call > 0 and q_put > 0:
+                    strategy = "Long Straddle"
+                elif q_call < 0 and q_put < 0:
+                    strategy = "Short Straddle"
+                else:
+                    strategy = "Synthetic Long Stock" if q_call > 0 else "Synthetic Short Stock"
+                return {**base_metrics, "strategy_type": strategy}
+            
+            if unique_strikes_count == 2:
+                if q_call > 0 and q_put > 0:
+                    strategy = "Long Strangle"
+                elif q_call < 0 and q_put < 0:
+                    strategy = "Short Strangle"
+                else:
+                    strategy = "Risk Reversal"
+                return {**base_metrics, "strategy_type": strategy}
 
-        if (is_standard_fly or is_inverse_fly) or len(calls) == 3 or len(puts) == 3:
+    # 3. BUTTERFLIES & BWBs (3 Legs, 1 Expiry)
+    if total_contract_legs == 3 and expirations == 1 and unique_strikes_count == 3:
+        q1, q2, q3 = quantities
+        
+        # Enforce ratio geometry AND opposing body logic
+        is_fly_ratio = math.isclose(abs(q2), abs(q1) + abs(q3), rel_tol=1e-3)
+        has_opposing_body = (q1 * q2 < 0) and (q3 * q2 < 0)
+
+        if is_fly_ratio and has_opposing_body:
             wing1 = round(abs(strikes[1] - strikes[0]), 2)
             wing2 = round(abs(strikes[2] - strikes[1]), 2)
             
             if len(calls) == 3:
-                strategy = "Call Butterfly" if wing1 == wing2 else "Call BWB"
+                strategy = "Call Butterfly" if math.isclose(wing1, wing2, abs_tol=1e-2) else "Call BWB"
                 return {**base_metrics, "strategy_type": strategy}
             elif len(puts) == 3:
-                strategy = "Put Butterfly" if wing1 == wing2 else "Put BWB"
+                strategy = "Put Butterfly" if math.isclose(wing1, wing2, abs_tol=1e-2) else "Put BWB"
                 return {**base_metrics, "strategy_type": strategy}
 
-    # 3. IRON BUTTERFLIES (4 Legs, 1 Expiry, 3 Strikes)
+    # 4. IRON BUTTERFLIES (4 Legs, 1 Expiry, 3 Strikes)
     if total_contract_legs == 4 and expirations == 1 and unique_strikes_count == 3:
         long_calls = calls.filter(pl.col("merged_quantity") > 0)
         short_calls = calls.filter(pl.col("merged_quantity") < 0)
@@ -106,15 +158,10 @@ def classify_merged_combo(group_df: pl.DataFrame, raw_proceeds_sum: float) -> di
         short_puts = puts.filter(pl.col("merged_quantity") < 0)
 
         if len(long_calls) == 1 and len(short_calls) == 1 and len(long_puts) == 1 and len(short_puts) == 1:
-            lp_k = long_puts["strike"][0]
-            sp_k = short_puts["strike"][0]
-            sc_k = short_calls["strike"][0]
-            lc_k = long_calls["strike"][0]
-
-            if lp_k < sp_k and sp_k == sc_k and sc_k < lc_k:
+            if long_puts["strike"][0] < short_puts["strike"][0] == short_calls["strike"][0] < long_calls["strike"][0]:
                 return {**base_metrics, "strategy_type": "Iron Butterfly"}
 
-    # 4. IRON CONDORS (4 Legs, 1 Expiry, 4 Strikes)
+    # 5. IRON CONDORS (4 Legs, 1 Expiry, 4 Strikes)
     if total_contract_legs == 4 and expirations == 1 and unique_strikes_count == 4:
         long_calls = calls.filter(pl.col("merged_quantity") > 0)
         short_calls = calls.filter(pl.col("merged_quantity") < 0)
@@ -122,22 +169,22 @@ def classify_merged_combo(group_df: pl.DataFrame, raw_proceeds_sum: float) -> di
         short_puts = puts.filter(pl.col("merged_quantity") < 0)
 
         if len(long_calls) == 1 and len(short_calls) == 1 and len(long_puts) == 1 and len(short_puts) == 1:
-            lp_k = long_puts["strike"][0]
-            sp_k = short_puts["strike"][0]
-            sc_k = short_calls["strike"][0]
-            lc_k = long_calls["strike"][0]
-
-            if lp_k < sp_k < sc_k < lc_k:
+            if long_puts["strike"][0] < short_puts["strike"][0] < short_calls["strike"][0] < long_calls["strike"][0]:
                 return {**base_metrics, "strategy_type": "Iron Condor"}
 
-    # 5. CALENDARS & DIAGONALS (2 Legs, 2 Expiries)
+    # 6. CALENDARS & DIAGONALS (2 Legs, 2 Expiries)
     if total_contract_legs == 2 and expirations == 2:
+        # Note: Added basic opposing leg check to ensure it's a spread
         if len(puts) == 2:
-            strategy = "Put Calendar Spread" if unique_strikes_count == 1 else "Put Diagonal Spread"
-            return {**base_metrics, "strategy_type": strategy}
+            q1, q2 = puts["merged_quantity"].to_list()
+            if q1 * q2 < 0:
+                strategy = "Put Calendar Spread" if unique_strikes_count == 1 else "Put Diagonal Spread"
+                return {**base_metrics, "strategy_type": strategy}
         if len(calls) == 2:
-            strategy = "Call Calendar Spread" if unique_strikes_count == 1 else "Call Diagonal Spread"
-            return {**base_metrics, "strategy_type": strategy}
+            q1, q2 = calls["merged_quantity"].to_list()
+            if q1 * q2 < 0:
+                strategy = "Call Calendar Spread" if unique_strikes_count == 1 else "Call Diagonal Spread"
+                return {**base_metrics, "strategy_type": strategy}
 
     return {**base_metrics, "strategy_type": "Custom / Unknown"}
 
@@ -256,7 +303,7 @@ def process_ibkr_flex_file(file_path: Path):
             raw_proceeds_sum = sub_merged["merged_proceeds"].sum()
             total_commissions = sub_merged["merged_commission"].sum()
             
-            classification = classify_merged_combo(sub_merged, raw_proceeds_sum)
+            classification = classify_merged_combo(sub_merged, float(raw_proceeds_sum))
             
             units = classification["spread_units"]
             entry_cashflow = raw_proceeds_sum / units if units > 0 else raw_proceeds_sum
