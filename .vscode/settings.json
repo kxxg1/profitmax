@@ -10,26 +10,34 @@
     "cSpell.words": [
         "asyncio",
         "atpublic",
+        "attribs",
         "certifi",
         "checkmark",
+        "colour",
+        "conid",
         "dateutil",
         "Docstrings",
         "dotenv",
         "duckdb",
         "fastapi",
+        "favourable",
         "httpcore",
         "httpx",
         "ibkr",
         "idna",
         "iniconfig",
         "lifecycles",
+        "mastertradegrid",
         "mdurl",
         "mypy",
+        "normalise",
+        "normalised",
         "nowrap",
         "numpy",
         "pandera",
         "parsy",
         "pasteable",
+        "persistences",
         "pluggy",
         "profitmax",
         "pyarrow",
@@ -37,14 +45,23 @@
         "pydantic",
         "pygments",
         "pytest",
+        "realised",
+        "recognised",
         "refetches",
+        "reparsing",
+        "rgba",
+        "Roboto",
+        "Segoe",
         "sqlglot",
         "starlette",
         "toolz",
         "typeguard",
         "tzdata",
+        "unrealised",
+        "unrecognised",
         "uvicorn",
-        "Vite"
+        "Vite",
+        "VWAP"
     ],
     "duckdb.databases": [
         {
@@ -55,5 +72,7 @@
             "readOnly": false
         }
     ],
-    "duckdb.defaultDatabase": "profitmax"
+    "duckdb.defaultDatabase": "profitmax",
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.terminal.useEnvFile": true
 }
