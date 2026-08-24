@@ -2,6 +2,7 @@
 import '@fontsource/roboto/300.css'; // Light (For table body cells)
 import '@fontsource/roboto/400.css'; // Regular
 import '@fontsource/roboto/500.css'; // Medium (For table headers)
+import 'katex/dist/katex.min.css';
 
 // Material Symbols Icons
 import 'material-symbols/outlined.css';
