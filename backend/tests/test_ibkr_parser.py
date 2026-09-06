@@ -1,5 +1,5 @@
 import duckdb
-
+from app.core import db
 from app.core.db import get_db_connection
 from app.services import ibkr_parser
 
@@ -37,7 +37,9 @@ def test_process_ibkr_flex_file_includes_buy_sell_and_notes(tmp_path, monkeypatc
         """.strip()
     )
 
-    monkeypatch.setattr(ibkr_parser, "DB_PATH", tmp_path / "profitmax.duckdb")
+    test_db_path = tmp_path / "profitmax.duckdb"
+    monkeypatch.setattr(db, "DB_PATH", test_db_path)
+    monkeypatch.setattr(ibkr_parser, "DB_PATH", test_db_path)
     get_db_connection().close()
 
     result = ibkr_parser.process_ibkr_flex_file(xml_path)
