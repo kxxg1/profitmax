@@ -13,4 +13,6 @@ wheels/
 *.duckdb
 *.env
 .env.*
-backend/data/*.duckdb*
+
+# DuckDB database and runtime files
+data/*.duckdb*
